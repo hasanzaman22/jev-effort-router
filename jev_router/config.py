@@ -18,25 +18,30 @@ from typing import Any
 
 # Tiers are ordered from cheapest to strongest. Each tier has a matching
 # subagent in agents/<name>.md, so tier names are fixed. Thresholds are not:
-# a request goes to the first tier whose max_difficulty is >= its difficulty.
+# a request goes to the first tier whose max_difficulty is >= its difficulty,
+# which is Jev's capability level scaled to 0-1 (0, 0.25, 0.5, 0.75, 1).
 DEFAULTS: dict[str, Any] = {
     "enabled": True,
     "jev": {
-        "endpoint": "https://api.typesafe.ai/v1/systemone",
-        "model": "jev-latest",
-        "api_key_env": "TYPESAFE_API_KEY",
+        # The key is read from api_key_env, then TYPESAFE_API_KEY,
+        # OPENROUTER_API_KEY, and OPENCODE_API_KEY. Its prefix picks the
+        # service (sk-or- OpenRouter, oc_sk_ OpenCode, anything else TypeSafe).
+        # Set provider, endpoint, or model only to override that choice.
+        "api_key_env": "JEV_API_KEY",
+        "provider": None,
+        "endpoint": None,
+        "model": None,
         "timeout_seconds": 4.0,
     },
     # Each Score is read at this quantile of its probability distribution
     # instead of its mean. 0.85 means "the level the task is at or below with
     # 85% probability", so an uncertain answer resolves toward the harder level.
     "quantile": 0.85,
-    "weights": {"complexity": 0.5, "reasoning": 0.3, "risk": 0.2},
     "tiers": [
-        {"name": "haiku-low", "model": "haiku", "effort": "low", "max_difficulty": 0.22},
-        {"name": "sonnet-medium", "model": "sonnet", "effort": "medium", "max_difficulty": 0.45},
-        {"name": "sonnet-high", "model": "sonnet", "effort": "high", "max_difficulty": 0.60},
-        {"name": "opus-high", "model": "opus", "effort": "high", "max_difficulty": 0.82},
+        {"name": "haiku-low", "model": "haiku", "effort": "low", "max_difficulty": 0.0},
+        {"name": "sonnet-medium", "model": "sonnet", "effort": "medium", "max_difficulty": 0.25},
+        {"name": "sonnet-high", "model": "sonnet", "effort": "high", "max_difficulty": 0.5},
+        {"name": "opus-high", "model": "opus", "effort": "high", "max_difficulty": 0.75},
         {"name": "opus-xhigh", "model": "opus", "effort": "xhigh", "max_difficulty": 1.0},
     ],
     # A risky request never goes below this tier, whatever its difficulty.

@@ -54,22 +54,17 @@ def parse_override(prompt: str) -> str | None:
 
 def decide(judgments: Judgments, config: dict[str, Any]) -> Decision:
     tiers = config["tiers"]
-    weights = config["weights"]
     q = float(config["quantile"])
 
-    normalized: dict[str, float] = {}
     levels: dict[str, int] = {}
+    normalized: dict[str, float] = {}
     for qid, count in SCORE_LEVELS.items():
-        level = quantile_level(judgments.distributions[qid], q)
-        levels[qid] = level
-        normalized[qid] = level / (count - 1)
+        levels[qid] = quantile_level(judgments.distributions[qid], q)
+        normalized[qid] = levels[qid] / (count - 1)
 
-    weight_sum = sum(weights.values()) or 1.0
-    difficulty = sum(weights[k] * normalized[k] for k in weights) / weight_sum
-    # A hard dimension should not be averaged away by easy ones.
-    difficulty = max(difficulty, 0.8 * max(normalized["complexity"], normalized["reasoning"]))
-    difficulty = round(min(1.0, difficulty), 3)
-
+    # The capability question names the least capable model that can do the
+    # task, with one level per tier, so it is the difficulty directly.
+    difficulty = round(normalized["capability"], 3)
     reasons = [f"{k} level {levels[k]}/{SCORE_LEVELS[k] - 1}" for k in SCORE_LEVELS]
     index = len(tiers) - 1
     for i, tier in enumerate(tiers):

@@ -12,11 +12,16 @@ from jev_router.judgments import Judgments, heuristic, parse_jev_response
 from jev_router.router import decide, quantile_level, route, session_rank, should_delegate
 
 
+# Clear every variable a key can come from, so a key in the developer's shell
+# never reaches a test.
+NO_KEYS = {name: "" for name in ("JEV_API_KEY", *judgments.KEY_ENV_FALLBACKS)}
+
+
 def config():
     return copy.deepcopy(DEFAULTS)
 
 
-def jev_payload(complexity, reasoning, risk, context=0.05):
+def jev_payload(complexity, capability, risk, context=0.05):
     """A Jev response with the given per-level probabilities."""
     def score(probs):
         return {"type": "score", "score": sum(i * p for i, p in enumerate(probs)), "confidence": 0.9,
@@ -25,7 +30,7 @@ def jev_payload(complexity, reasoning, risk, context=0.05):
         "model": "jev-test",
         "answers": {
             "complexity": score(complexity),
-            "reasoning": score(reasoning),
+            "capability": score(capability),
             "risk": score(risk),
             "context_dependent": {"type": "noul", "noul": context},
         },
@@ -47,45 +52,45 @@ class QuantileTest(unittest.TestCase):
 
 class DecideTest(unittest.TestCase):
     def test_trivial_goes_to_cheapest(self):
-        j = parse_jev_response(jev_payload([1, 0, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]))
+        j = parse_jev_response(jev_payload([1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0]))
         self.assertEqual(decide(j, config()).name, "haiku-low")
 
     def test_small_edit(self):
-        j = parse_jev_response(jev_payload([0, 1, 0, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]))
+        j = parse_jev_response(jev_payload([0, 1, 0, 0, 0], [0, 1, 0, 0, 0], [0, 1, 0, 0]))
         self.assertEqual(decide(j, config()).name, "sonnet-medium")
 
     def test_hardest_goes_to_top(self):
-        j = parse_jev_response(jev_payload([0, 0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 1, 0]))
+        j = parse_jev_response(jev_payload([0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 0, 1, 0]))
         self.assertEqual(decide(j, config()).name, "opus-xhigh")
 
     def test_risk_floor(self):
         # Easy but touches production: never below opus-high.
-        j = parse_jev_response(jev_payload([0, 1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1]))
+        j = parse_jev_response(jev_payload([0, 1, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 0, 1]))
         decision = decide(j, config())
         self.assertEqual(decision.name, "opus-high")
         self.assertIn("raised to risk floor", decision.reasons)
 
     def test_uncertainty_picks_stronger(self):
-        sure = parse_jev_response(jev_payload([0, 0, 1, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0]))
-        unsure = parse_jev_response(jev_payload([0, 0, 0.7, 0.3, 0], [0, 0, 0.7, 0.3], [0, 1, 0, 0]))
+        sure = parse_jev_response(jev_payload([0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 1, 0, 0]))
+        unsure = parse_jev_response(jev_payload([0, 0, 0.7, 0.3, 0], [0, 0, 0.7, 0.3, 0], [0, 1, 0, 0]))
         tiers = [t["name"] for t in DEFAULTS["tiers"]]
         self.assertGreater(tiers.index(decide(unsure, config()).name), tiers.index(decide(sure, config()).name))
 
     def test_heuristic_bump(self):
         j = Judgments(source="heuristic", distributions={
-            "complexity": [1, 0, 0, 0, 0], "reasoning": [1, 0, 0, 0], "risk": [1, 0, 0, 0]})
+            "complexity": [1, 0, 0, 0, 0], "capability": [1, 0, 0, 0, 0], "risk": [1, 0, 0, 0]})
         self.assertEqual(decide(j, config()).name, "sonnet-medium")
 
     def test_thresholds_are_configurable(self):
         cfg = config()
-        cfg["tiers"][0]["max_difficulty"] = 0.5
-        j = parse_jev_response(jev_payload([0, 1, 0, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]))
+        cfg["tiers"][0]["max_difficulty"] = 0.25
+        j = parse_jev_response(jev_payload([0, 1, 0, 0, 0], [0, 1, 0, 0, 0], [0, 1, 0, 0]))
         self.assertEqual(decide(j, cfg).name, "haiku-low")
 
 
 class HeuristicTest(unittest.TestCase):
     def tier(self, prompt):
-        with mock.patch.dict(os.environ, {"TYPESAFE_API_KEY": ""}):
+        with mock.patch.dict(os.environ, NO_KEYS):
             return route(prompt, config()).name
 
     def test_simple_cheaper_than_complex(self):
@@ -111,25 +116,25 @@ class OverrideTest(unittest.TestCase):
         self.assertEqual((decision.name, decision.source), ("opus-xhigh", "override"))
 
     def test_unknown_tier_ignored(self):
-        with mock.patch.dict(os.environ, {"TYPESAFE_API_KEY": ""}):
+        with mock.patch.dict(os.environ, NO_KEYS):
             self.assertEqual(route("[jev:gpt] hi", config()).source, "heuristic")
 
 
 class JevCallTest(unittest.TestCase):
     def test_uses_jev_when_key_set(self):
-        body = json.dumps(jev_payload([1, 0, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0])).encode()
+        body = json.dumps(jev_payload([1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0])).encode()
         response = mock.MagicMock()
         response.__enter__.return_value = io.BytesIO(body)
-        with mock.patch.dict(os.environ, {"TYPESAFE_API_KEY": "k"}), \
+        with mock.patch.dict(os.environ, {**NO_KEYS, "TYPESAFE_API_KEY": "k"}), \
                 mock.patch("urllib.request.urlopen", return_value=response) as urlopen:
             decision = route("hello", config())
         self.assertEqual((decision.source, decision.name), ("jev", "haiku-low"))
         sent = json.loads(urlopen.call_args[0][0].data)
-        self.assertEqual(set(sent["questions"]), {"complexity", "reasoning", "risk", "context_dependent"})
+        self.assertEqual(set(sent["questions"]), {"complexity", "capability", "risk", "context_dependent"})
         self.assertEqual(sent["state"]["request"]["prompt"], "hello")
 
     def test_falls_back_on_error(self):
-        with mock.patch.dict(os.environ, {"TYPESAFE_API_KEY": "k"}), \
+        with mock.patch.dict(os.environ, {**NO_KEYS, "TYPESAFE_API_KEY": "k"}), \
                 mock.patch("urllib.request.urlopen", side_effect=OSError("down")):
             decision = route("hello", config())
         self.assertEqual(decision.source, "heuristic")
@@ -140,9 +145,49 @@ class JevCallTest(unittest.TestCase):
             parse_jev_response({"answers": {}})
 
 
+class ProviderTest(unittest.TestCase):
+    def resolve(self, env, **jev):
+        with mock.patch.dict(os.environ, {**NO_KEYS, **env}):
+            return judgments.resolve_jev({**config()["jev"], **jev})
+
+    def test_prefix_picks_provider(self):
+        cases = {
+            "sk-or-v1-abc": ("openrouter", "https://openrouter.ai/api/v1/systemone", "~typesafe/jev-latest"),
+            "oc_sk_abc": ("opencode", "https://opencode.ai/inference/systemone/v1/systemone", "jev-1.13-free"),
+            "ts-abc": ("typesafe", "https://api.typesafe.ai/v1/systemone", "jev-latest"),
+        }
+        for key, expected in cases.items():
+            self.assertEqual(self.resolve({"JEV_API_KEY": key})[1:], expected)
+
+    def test_fallback_env_names(self):
+        key, provider, _, _ = self.resolve({"OPENROUTER_API_KEY": "sk-or-v1-abc"})
+        self.assertEqual((key, provider), ("sk-or-v1-abc", "openrouter"))
+
+    def test_jev_api_key_wins(self):
+        self.assertEqual(self.resolve({"JEV_API_KEY": "oc_sk_a", "OPENROUTER_API_KEY": "sk-or-b"})[1], "opencode")
+
+    def test_explicit_config_wins(self):
+        _, provider, endpoint, model = self.resolve({"JEV_API_KEY": "sk-or-v1-abc"}, model="typesafe/jev-1.14")
+        self.assertEqual((provider, model), ("openrouter", "typesafe/jev-1.14"))
+        self.assertEqual(self.resolve({"JEV_API_KEY": "x"}, endpoint="http://localhost:1")[2], "http://localhost:1")
+
+    def test_request_goes_to_detected_provider(self):
+        body = json.dumps(jev_payload([1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0])).encode()
+        response = mock.MagicMock()
+        response.__enter__.return_value = io.BytesIO(body)
+        with mock.patch.dict(os.environ, {**NO_KEYS, "JEV_API_KEY": "sk-or-v1-abc"}), \
+                mock.patch("urllib.request.urlopen", return_value=response) as urlopen:
+            decision = route("hello", config())
+        request = urlopen.call_args[0][0]
+        self.assertEqual(request.full_url, "https://openrouter.ai/api/v1/systemone")
+        self.assertEqual(request.get_header("Authorization"), "Bearer sk-or-v1-abc")
+        self.assertEqual(json.loads(request.data)["model"], "~typesafe/jev-latest")
+        self.assertEqual(decision.detail["provider"], "openrouter")
+
+
 class DelegateTest(unittest.TestCase):
     def decision(self, tier, complexity_level=2, context=0.0):
-        j = parse_jev_response(jev_payload([1, 0, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], context))
+        j = parse_jev_response(jev_payload([1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0], context))
         d = decide(j, config())
         d.tier = next(t for t in DEFAULTS["tiers"] if t["name"] == tier)
         d.complexity_level = complexity_level
@@ -176,7 +221,7 @@ class DelegateTest(unittest.TestCase):
 class HookTest(unittest.TestCase):
     def run_hook(self, payload, env=None):
         with tempfile.TemporaryDirectory() as tmp:
-            environ = {"TYPESAFE_API_KEY": "", "CLAUDE_PLUGIN_DATA": tmp, "HOME": tmp, **(env or {})}
+            environ = {**NO_KEYS, "CLAUDE_PLUGIN_DATA": tmp, "HOME": tmp, **(env or {})}
             with mock.patch.dict(os.environ, environ):
                 out = hook.handle(payload)
                 log = os.path.join(tmp, "decisions.jsonl")

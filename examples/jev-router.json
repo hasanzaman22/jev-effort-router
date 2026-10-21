@@ -1,13 +1,5 @@
 {
-  "quantile": 0.9,
-  "weights": { "complexity": 0.5, "reasoning": 0.3, "risk": 0.2 },
-  "tiers": [
-    { "name": "haiku-low", "model": "haiku", "effort": "low", "max_difficulty": 0.15 },
-    { "name": "sonnet-medium", "model": "sonnet", "effort": "medium", "max_difficulty": 0.45 },
-    { "name": "sonnet-high", "model": "sonnet", "effort": "high", "max_difficulty": 0.6 },
-    { "name": "opus-high", "model": "opus", "effort": "high", "max_difficulty": 0.82 },
-    { "name": "opus-xhigh", "model": "opus", "effort": "xhigh", "max_difficulty": 1.0 }
-  ],
+  "quantile": 0.95,
   "risk_floor": { "min_risk": 0.66, "tier": "opus-high" },
   "delegate": { "enabled": true, "down_min_complexity_level": 2 },
   "show_decision": true,

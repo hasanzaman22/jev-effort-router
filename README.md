@@ -11,10 +11,10 @@ Example (the numbers are illustrative):
 
 ```
 you> fix the typo in README.md
-jev-router: haiku-low (difficulty 0.20, jev; delegating)
+jev-router: haiku-low (difficulty 0.00, jev; delegating)
 
 you> the checkout page double-charges some users in production, find out why
-jev-router: opus-high (difficulty 0.58, jev; delegating)
+jev-router: opus-high (difficulty 0.75, jev; delegating)
 ```
 
 ## How it works
@@ -37,31 +37,33 @@ Jev answers these questions about each prompt. All four go in one request and ru
 | Question | Type | Levels |
 | --- | --- | --- |
 | `complexity`: how much work the task is | Score | conversational reply → small edit → few-file task → large change → architecture or subtle bugs |
-| `reasoning`: how much careful thinking it needs | Score | direct → few steps → careful analysis → deep reasoning |
-| `risk`: what a subtle mistake would cost | Score | read-only → reversible dev change → costly (APIs, auth, payments) → production, security, or irreversible |
+| `capability`: the least capable assistant that would do it right the first time | Score | small fast model, minimal thinking → mid-sized, moderate → mid-sized, careful → strongest, careful → strongest, deep thinking |
+| `risk`: what a subtle mistake would cost | Score | read-only → reversible dev change (including deleting temp files) → costly (APIs, auth, payments) → production, real user data, secrets, or irreversible |
 | `context_dependent`: whether it only makes sense with the earlier conversation | Noul | probability of yes |
 
 ### From judgments to a tier
 
+Each Score level is a short description plus a few generic examples, which keeps Jev from
+splitting its answer between neighbouring levels.
+
 - **Unsure answers count as the harder level.** Each Score is read at the 85th percentile of its
-  probability distribution, not at its mean. If Jev puts 70% on "few-file task" and 30% on
-  "large change", the router treats the task as a large change.
-- **Weighted difficulty.** `0.5 × complexity + 0.3 × reasoning + 0.2 × risk`, each scaled to
-  0–1. A single hard dimension still counts: the difficulty is never below
-  `0.8 × max(complexity, reasoning)`.
-- **Tiers.** The task goes to the first tier whose `max_difficulty` is at or above its difficulty:
+  probability distribution, not at its mean. If Jev puts 70% on "mid-sized model, careful
+  thinking" and 30% on "strongest model", the router takes the strongest model.
+- **Capability picks the tier.** The `capability` levels match the tiers one to one. The level is
+  scaled to a difficulty of 0, 0.25, 0.5, 0.75, or 1, and the task goes to the first tier whose
+  `max_difficulty` is at or above it:
 
   | Tier | Model | Effort | Max difficulty |
   | --- | --- | --- | --- |
-  | `haiku-low` | haiku | low | 0.22 |
-  | `sonnet-medium` | sonnet | medium | 0.45 |
-  | `sonnet-high` | sonnet | high | 0.60 |
-  | `opus-high` | opus | high | 0.82 |
+  | `haiku-low` | haiku | low | 0.00 |
+  | `sonnet-medium` | sonnet | medium | 0.25 |
+  | `sonnet-high` | sonnet | high | 0.50 |
+  | `opus-high` | opus | high | 0.75 |
   | `opus-xhigh` | opus | xhigh | 1.00 |
 
 - **Risk floor.** If the risk is at the top level (production, security, irreversible), the task
   never goes below `opus-high`.
-- **Offline fallback.** Without a TypeSafe API key, or if Jev does not answer within 4 seconds,
+- **Offline fallback.** Without a Jev API key, or if Jev does not answer within 4 seconds,
   a built-in keyword heuristic gives the same four judgments. Because the heuristic is less
   reliable, its pick moves up one tier.
 
@@ -87,14 +89,29 @@ reruns the task on the next stronger tier.
 
 ## Install
 
-### 1. Get a TypeSafe API key (recommended)
+### 1. Get a Jev API key (recommended)
 
-Create a key at [console.typesafe.ai](https://console.typesafe.ai) and export it in your shell
-profile, so Claude Code and its hooks can read it:
+Jev is available from three services. A key from any of them works:
+
+| Service | Where to get a key | Key starts with | Model used |
+| --- | --- | --- | --- |
+| TypeSafe | [console.typesafe.ai](https://console.typesafe.ai) | anything else | `jev-latest` |
+| OpenRouter | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) | `sk-or-` | `~typesafe/jev-latest` |
+| OpenCode Zen | [opencode.ai](https://opencode.ai) console | `oc_sk_` | `jev-1.13-free` |
+
+Export the key in your shell profile, so Claude Code and its hooks can read it:
 
 ```sh
-export TYPESAFE_API_KEY="ts-..."
+export JEV_API_KEY="sk-or-v1-..."
 ```
+
+jev-router looks at the key's prefix and sends requests to the service that issued it, with that
+service's Jev model. No other setup is needed. If you already export the key under its service's
+usual name (`TYPESAFE_API_KEY`, `OPENROUTER_API_KEY`, or `OPENCODE_API_KEY`), that works too;
+`JEV_API_KEY` is checked first.
+
+OpenCode's `jev-1.13-free` is free for a limited time. With a paid OpenCode balance, set
+`jev.model` to `jev-1.13` (see [Configure](#configure)).
 
 Without a key, jev-router still works, using the offline heuristic.
 
@@ -178,11 +195,12 @@ Later files override earlier ones, key by key:
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `true` | turn routing on or off |
-| `jev.model` | `"jev-latest"` | TypeSafe model name |
-| `jev.api_key_env` | `"TYPESAFE_API_KEY"` | environment variable that holds the key |
+| `jev.api_key_env` | `"JEV_API_KEY"` | environment variable checked first for the key (then `TYPESAFE_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`) |
+| `jev.provider` | from the key prefix | `"typesafe"`, `"openrouter"`, or `"opencode"` |
+| `jev.endpoint` | the provider's | Jev request URL, for a proxy or a new service |
+| `jev.model` | the provider's | Jev model name, such as `"typesafe/jev-1.14"` to pin a version on OpenRouter |
 | `jev.timeout_seconds` | `4.0` | after this, use the heuristic |
 | `quantile` | `0.85` | how strongly uncertainty pushes toward stronger tiers (higher = safer, costlier) |
-| `weights` | `0.5 / 0.3 / 0.2` | weights of complexity, reasoning, and risk |
 | `tiers[].max_difficulty` | see table above | tier thresholds. Tier names are fixed, because each one has a subagent. |
 | `risk_floor` | `{"min_risk": 0.75, "tier": "opus-high"}` | the lowest tier allowed for risky work |
 | `heuristic_tier_bump` | `1` | extra tiers added when the heuristic decides |
@@ -202,6 +220,10 @@ Later files override earlier ones, key by key:
 - Delegation has overhead: the main session writes a brief and reads the result. If your
   session already runs on a cheap model, start hard tasks with `jev-claude`, or let the hook
   move them up to a stronger tier.
+- **Measured accuracy.** On 54 held-out coding prompts labeled by hand (Jev 1.14), the router
+  picked the expected tier for 46, one tier higher for 7, two tiers higher for 1, and a tier that
+  was too weak for none. It flagged all 60 prompts correctly as depending on the earlier
+  conversation or not. The labels are one person's judgment, so treat this as a sanity check.
 - **Check it on your own work.** The thresholds are a starting point. Look at
   `decisions.jsonl` and adjust `tiers[].max_difficulty` or `quantile` if the routing does not
   match what you would choose.
