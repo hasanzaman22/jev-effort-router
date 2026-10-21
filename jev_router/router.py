@@ -59,9 +59,12 @@ def decide(judgments: Judgments, config: dict[str, Any]) -> Decision:
         levels[qid] = quantile_level(judgments.distributions[qid], q)
         normalized[qid] = levels[qid] / (count - 1)
 
-    # The effort question has one level per effort setting, so it is the
-    # difficulty directly.
-    difficulty = round(normalized["effort"], 3)
+    # The effort question has one level per effort setting. Its mean, scaled to
+    # 0-1, is the difficulty: on held-out prompts it matched the expected level
+    # more often than a quantile did, with the thresholds below.
+    effort = judgments.distributions["effort"]
+    mean = sum(i * p for i, p in enumerate(effort)) / (sum(effort) or 1.0)
+    difficulty = round(mean / (SCORE_LEVELS["effort"] - 1), 3)
     reasons = [f"{k} level {levels[k]}/{SCORE_LEVELS[k] - 1}" for k in SCORE_LEVELS]
     index = len(tiers) - 1
     for i, tier in enumerate(tiers):

@@ -1,6 +1,12 @@
 {
   "quantile": 0.95,
-  "risk_floor": { "min_risk": 0.66, "tier": "opus-high" },
+  "tiers": [
+    { "name": "low", "effort": "low", "max_difficulty": 0.08 },
+    { "name": "medium", "effort": "medium", "max_difficulty": 0.33 },
+    { "name": "high", "effort": "high", "max_difficulty": 0.7 },
+    { "name": "xhigh", "effort": "xhigh", "max_difficulty": 1.0 }
+  ],
+  "risk_floor": { "min_risk": 0.66, "tier": "high" },
   "show_decision": true,
   "log_prompt_text": false
 }
