@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jev-router"
+version = "0.1.0"
+description = "Route Claude Code prompts to the cheapest model and effort level that keeps quality, using TypeSafe Jev."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [{ name = "Hasan Zamanli" }]
+keywords = ["claude-code", "router", "llm", "cost", "jev", "typesafe"]
+
+[project.urls]
+Homepage = "https://github.com/hasanzaman22/jev-model-effort-router"
+
+[project.scripts]
+jev-claude = "jev_router.cli:main"
+
+[tool.setuptools]
+packages = ["jev_router"]

@@ -1,0 +1,14 @@
+{
+  "name": "jev-router",
+  "owner": { "name": "Hasan Zamanli", "url": "https://github.com/hasanzaman22" },
+  "description": "Automatic model and effort routing for Claude Code, powered by TypeSafe Jev.",
+  "plugins": [
+    {
+      "name": "jev-router",
+      "source": "./",
+      "description": "Routes each prompt to the cheapest Claude model and effort level that keeps quality.",
+      "version": "0.1.0",
+      "category": "productivity"
+    }
+  ]
+}
