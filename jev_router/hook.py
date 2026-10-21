@@ -70,7 +70,7 @@ def handle_switch(payload: dict[str, Any]) -> dict[str, Any] | None:
     return {
         "effort": effort,
         "keep": keep,
-        "message": f"jev-router: effort {effort} ({score}, {decision.source})" if config.get("show_decision", True) else "",
+        "message": f"effort {effort} ({score}, {decision.source})" if config.get("show_decision", True) else "",
     }
 
 

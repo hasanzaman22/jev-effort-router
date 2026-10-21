@@ -11,8 +11,6 @@ export const register: Register = on => {
   // The effort the session runs at now. It lasts until a prompt routes elsewhere,
   // so a follow-up like "yes, do that" keeps the effort of the work it continues.
   let current: Picked | undefined
-  // The level last written to the session's own /effort setting.
-  let shown: string | undefined
 
   on('prompt.submit', async ($, e, next) => {
     // Slash commands and prompts the person did not type are not routed.
@@ -29,7 +27,7 @@ export const register: Register = on => {
         $.ui.status(undefined)
       } else if (!picked.keep || !current) {
         current = picked
-        $.ui.status(`jev effort: ${picked.effort}`)
+        $.ui.status(`effort ${picked.effort}`)
         if (picked.message) $.ui.log(picked.message)
       }
     } catch {
@@ -43,19 +41,5 @@ export const register: Register = on => {
   on('turn.step', async function* ($, e, next) {
     if (!current || e.agentId || e.effort === undefined) return yield* next(e)
     return yield* next({ ...e, effort: current.effort })
-  })
-
-  // Once the turn ends, run /effort too, so the session's own setting (what
-  // /effort and the prompt bar show) matches the routed level. A command
-  // cannot run while a prompt.submit hook holds the turn, so it runs here.
-  on('turn.complete', async ($, e, next) => {
-    const result = await next(e)
-    if (current && !e.agentId && current.effort !== shown) {
-      shown = current.effort
-      $.command.run({ command: 'effort', args: current.effort }).catch(() => {
-        shown = undefined
-      })
-    }
-    return result
   })
 }

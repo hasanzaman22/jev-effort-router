@@ -6,3 +6,5 @@ build/
 dist/
 .venv/
 .serena/
+.claude-plugin/types/
+tsconfig.json

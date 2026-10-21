@@ -240,7 +240,7 @@ class HookTest(unittest.TestCase):
         self.assertNotIn("model", out)
         self.assertIn(out["effort"], ("high", "xhigh"))
         self.assertFalse(out["keep"])
-        self.assertTrue(out["message"].startswith("jev-router: effort "))
+        self.assertTrue(out["message"].startswith("effort "))
         record = json.loads(logged)
         self.assertEqual(record["tier"], out["effort"])
         self.assertNotIn("prompt", record)
