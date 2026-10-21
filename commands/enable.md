@@ -1,5 +1,5 @@
 ---
-description: "Turn jev-router on: route every prompt until /jevrouter:disable"
+description: "Turn jev-router on: route every prompt until /jev-effort-router:disable"
 allowed-tools: Bash(python3:*)
 ---
 

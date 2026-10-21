@@ -7,7 +7,7 @@ this order (later wins):
 2. <project>/.claude/jev-router.json    (per project)
 3. the file named by $JEV_ROUTER_CONFIG  (explicit)
 
-`/jevrouter:enable` and `/jevrouter:disable` write a small state file that
+`/jev-effort-router:enable` and `/jev-effort-router:disable` write a small state file that
 overrides `enabled` from all of these, until the next one of those commands.
 """
 

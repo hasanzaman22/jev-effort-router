@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for the /jevrouter:enable, :disable, and :status slash commands."""
+"""Entry point for the /jev-effort-router:enable, :disable, and :status slash commands."""
 
 import os
 import sys

@@ -13,7 +13,7 @@ authors = [{ name = "Hasan Zamanli" }]
 keywords = ["claude-code", "router", "llm", "cost", "jev", "typesafe"]
 
 [project.urls]
-Homepage = "https://github.com/hasanzaman22/jev-model-effort-router"
+Homepage = "https://github.com/hasanzaman22/jev-effort-router"
 
 [project.scripts]
 jev-claude = "jev_router.cli:main"

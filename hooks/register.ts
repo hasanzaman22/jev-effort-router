@@ -22,7 +22,7 @@ export const register: Register = on => {
       )
       const picked = exitCode === 0 ? (JSON.parse(stdout) as Picked | null) : null
       if (!picked) {
-        // Routing is off (/jevrouter:disable, [jev:off]): leave the session's own effort.
+        // Routing is off (/jev-effort-router:disable, [jev:off]): leave the session's own effort.
         current = undefined
         $.ui.status(undefined)
       } else if (!picked.keep || !current) {

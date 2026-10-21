@@ -1,10 +1,10 @@
 {
-  "name": "jevrouter",
+  "name": "jev-effort-router",
   "owner": { "name": "Hasan Zamanli", "url": "https://github.com/hasanzaman22" },
   "description": "Automatic effort level for Claude Code, powered by TypeSafe Jev.",
   "plugins": [
     {
-      "name": "jevrouter",
+      "name": "jev-effort-router",
       "source": "./",
       "description": "Sets the session's effort level for each prompt to the lowest one that keeps quality.",
       "version": "0.2.0",

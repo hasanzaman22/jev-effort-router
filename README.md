@@ -1,4 +1,4 @@
-# jev-router
+# jev-effort-router
 
 Automatic effort level for [Claude Code](https://code.claude.com), powered by
 [TypeSafe Jev](https://docs.typesafe.ai).
@@ -108,15 +108,15 @@ and may change between Claude Code releases.
 In Claude Code:
 
 ```
-/plugin marketplace add hasanzaman22/jev-model-effort-router
-/plugin install jevrouter@jevrouter
+/plugin marketplace add hasanzaman22/jev-effort-router
+/plugin install jev-effort-router@jev-effort-router
 ```
 
 Or from a terminal:
 
 ```sh
-claude plugin marketplace add hasanzaman22/jev-model-effort-router
-claude plugin install jevrouter@jevrouter
+claude plugin marketplace add hasanzaman22/jev-effort-router
+claude plugin install jev-effort-router@jev-effort-router
 ```
 
 Restart Claude Code. Your next prompt shows a `jev-router: …` line, and the status line shows the
@@ -127,17 +127,17 @@ To install it for a whole team, add this to the project's `.claude/settings.json
 ```json
 {
   "extraKnownMarketplaces": {
-    "jevrouter": { "source": { "source": "github", "repo": "hasanzaman22/jev-model-effort-router" } }
+    "jev-effort-router": { "source": { "source": "github", "repo": "hasanzaman22/jev-effort-router" } }
   },
-  "enabledPlugins": { "jevrouter@jevrouter": true }
+  "enabledPlugins": { "jev-effort-router@jev-effort-router": true }
 }
 ```
 
 ### 3. Install the launcher (optional)
 
 ```sh
-pipx install git+https://github.com/hasanzaman22/jev-model-effort-router
-# or: pip install --user git+https://github.com/hasanzaman22/jev-model-effort-router
+pipx install git+https://github.com/hasanzaman22/jev-effort-router
+# or: pip install --user git+https://github.com/hasanzaman22/jev-effort-router
 ```
 
 ## Usage
@@ -148,9 +148,9 @@ The plugin needs no action: type prompts as usual.
 
 | Command | Effect |
 | --- | --- |
-| `/jevrouter:disable` | stop routing every prompt, until you run `/jevrouter:enable` |
-| `/jevrouter:enable` | route every prompt again, until you run `/jevrouter:disable` |
-| `/jevrouter:status` | show whether routing is on and which Jev service it uses |
+| `/jev-effort-router:disable` | stop routing every prompt, until you run `/jev-effort-router:enable` |
+| `/jev-effort-router:enable` | route every prompt again, until you run `/jev-effort-router:disable` |
+| `/jev-effort-router:status` | show whether routing is on and which Jev service it uses |
 
 The switch applies to all your sessions and projects, and it lasts across restarts. It is saved in
 `~/.claude/jev-router/state.json` and overrides `enabled` in the config files. Routing is on
@@ -237,7 +237,7 @@ Layout:
 ```
 .claude-plugin/   plugin.json and marketplace.json
 hooks/            the mod: hooks.json names register.ts, which switches the effort
-commands/         /jevrouter:enable, :disable, and :status
+commands/         /jev-effort-router:enable, :disable, and :status
 jev_router/       router code (Python standard library only)
 bin/jev-claude    launcher
 tests/            unit tests (Jev is mocked)

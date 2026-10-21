@@ -1,5 +1,5 @@
 ---
-description: "Turn jev-router off until /jevrouter:enable"
+description: "Turn jev-router off until /jev-effort-router:enable"
 allowed-tools: Bash(python3:*)
 ---
 

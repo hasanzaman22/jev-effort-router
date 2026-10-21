@@ -1,11 +1,11 @@
 {
-  "name": "jevrouter",
+  "name": "jev-effort-router",
   "displayName": "Jev Effort Router",
   "version": "0.2.0",
   "description": "Scores each prompt with TypeSafe Jev and sets the session's effort level to the lowest one that keeps quality.",
   "author": { "name": "Hasan Zamanli", "url": "https://github.com/hasanzaman22" },
-  "homepage": "https://github.com/hasanzaman22/jev-model-effort-router",
-  "repository": "https://github.com/hasanzaman22/jev-model-effort-router",
+  "homepage": "https://github.com/hasanzaman22/jev-effort-router",
+  "repository": "https://github.com/hasanzaman22/jev-effort-router",
   "license": "MIT",
   "keywords": ["router", "effort", "cost", "jev", "typesafe"]
 }

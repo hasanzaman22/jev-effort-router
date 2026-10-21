@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for the jevrouter mod: picks the effort the session switches to."""
+"""Entry point for the jev-effort-router mod: picks the effort the session switches to."""
 
 import os
 import sys

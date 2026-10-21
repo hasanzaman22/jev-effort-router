@@ -1,4 +1,4 @@
-"""Pick the effort the Claude Code session switches to, for the jevrouter mod.
+"""Pick the effort the Claude Code session switches to, for the jev-effort-router mod.
 
 The mod (hooks/register.ts) runs scripts/route_switch.py on every prompt. This
 module routes the prompt, logs the decision, and prints the effort the mod then
@@ -46,7 +46,7 @@ def log_decision(payload: dict[str, Any], decision: Decision, why: str, config: 
 
 
 def handle_switch(payload: dict[str, Any]) -> dict[str, Any] | None:
-    """The effort the session should switch to, for the jevrouter mod.
+    """The effort the session should switch to, for the jev-effort-router mod.
 
     Returns None when routing is off for this prompt. `keep` is true when the
     prompt only makes sense with the earlier conversation ("yes, do that"): the

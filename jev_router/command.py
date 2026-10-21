@@ -1,8 +1,8 @@
-"""The /jevrouter:enable, :disable, and :status slash commands.
+"""The /jev-effort-router:enable, :disable, and :status slash commands.
 
-    /jevrouter:enable    route every prompt until disabled
-    /jevrouter:disable   stop routing until enabled
-    /jevrouter:status    show whether routing is on, and the Jev service in use
+    /jev-effort-router:enable    route every prompt until disabled
+    /jev-effort-router:disable   stop routing until enabled
+    /jev-effort-router:status    show whether routing is on, and the Jev service in use
 """
 
 from __future__ import annotations
@@ -31,10 +31,10 @@ def main(argv: list[str] | None = None) -> int:
     cwd = os.getcwd()
     if action in ("enable", "on"):
         set_enabled(True)
-        print("jev-router enabled. Every prompt is routed until you run /jevrouter:disable.")
+        print("jev-router enabled. Every prompt is routed until you run /jev-effort-router:disable.")
     elif action in ("disable", "off"):
         set_enabled(False)
-        print("jev-router disabled. Prompts are not routed until you run /jevrouter:enable.")
+        print("jev-router disabled. Prompts are not routed until you run /jev-effort-router:enable.")
     elif action == "status":
         print(status_text(cwd))
         print(f"State file: {state_path()}")
