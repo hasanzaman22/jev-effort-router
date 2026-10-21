@@ -1,4 +1,4 @@
-"""Turn judgments about a prompt into a model and effort tier."""
+"""Turn judgments about a prompt into an effort level."""
 
 from __future__ import annotations
 
@@ -8,9 +8,7 @@ from typing import Any
 
 from .judgments import SCORE_LEVELS, JevUnavailable, Judgments, ask_jev, heuristic
 
-MODEL_RANK = {"haiku": 0, "sonnet": 1, "opus": 2}
-
-# Per-prompt override: "[jev:off]" skips routing, "[jev:opus-high]" forces a tier.
+# Per-prompt override: "[jev:off]" skips routing, "[jev:high]" forces an effort level.
 _OVERRIDE = re.compile(r"\[jev:([a-z0-9-]+)\]", re.I)
 
 
@@ -20,7 +18,6 @@ class Decision:
     difficulty: float
     source: str  # "jev", "heuristic", or "override"
     context_dependent: float = 0.0
-    complexity_level: int = 0
     reasons: list[str] = field(default_factory=list)
     detail: dict[str, Any] = field(default_factory=dict)
 
@@ -62,9 +59,9 @@ def decide(judgments: Judgments, config: dict[str, Any]) -> Decision:
         levels[qid] = quantile_level(judgments.distributions[qid], q)
         normalized[qid] = levels[qid] / (count - 1)
 
-    # The capability question names the least capable model that can do the
-    # task, with one level per tier, so it is the difficulty directly.
-    difficulty = round(normalized["capability"], 3)
+    # The effort question has one level per effort setting, so it is the
+    # difficulty directly.
+    difficulty = round(normalized["effort"], 3)
     reasons = [f"{k} level {levels[k]}/{SCORE_LEVELS[k] - 1}" for k in SCORE_LEVELS]
     index = len(tiers) - 1
     for i, tier in enumerate(tiers):
@@ -83,14 +80,13 @@ def decide(judgments: Judgments, config: dict[str, Any]) -> Decision:
         bump = int(config.get("heuristic_tier_bump", 0))
         if bump:
             index = min(len(tiers) - 1, index + bump)
-            reasons.append(f"heuristic +{bump} tier")
+            reasons.append(f"heuristic +{bump} level")
 
     return Decision(
         tier=tiers[index],
         difficulty=difficulty,
         source=judgments.source,
         context_dependent=judgments.context_dependent,
-        complexity_level=levels["complexity"],
         reasons=reasons,
         detail=judgments.detail,
     )
@@ -107,7 +103,7 @@ def route(prompt: str, config: dict[str, Any], cwd: str | None = None) -> Decisi
         except KeyError:
             pass
         else:
-            return Decision(tier=tier, difficulty=-1.0, source="override", complexity_level=4,
+            return Decision(tier=tier, difficulty=-1.0, source="override",
                             reasons=[f"forced by [jev:{override}]"])
 
     try:
@@ -116,39 +112,3 @@ def route(prompt: str, config: dict[str, Any], cwd: str | None = None) -> Decisi
         judgments = heuristic(prompt)
         judgments.detail["jev_error"] = str(exc)
     return decide(judgments, config)
-
-
-def session_rank(tier_or_model: str | None, tiers: list[dict[str, Any]]) -> int | None:
-    """Rank of the session's tier, from a tier name or a model id like claude-opus-5-5."""
-    if not tier_or_model:
-        return None
-    value = tier_or_model.lower()
-    try:
-        return tier_index(tiers, value)
-    except KeyError:
-        pass
-    # Only the model is known: assume the strongest tier that uses it.
-    for model in MODEL_RANK:
-        if model in value:
-            matches = [i for i, t in enumerate(tiers) if t["model"] == model]
-            return max(matches) if matches else None
-    return None
-
-
-def should_delegate(decision: Decision, session: int | None, config: dict[str, Any]) -> tuple[bool, str]:
-    """Whether the main session should hand this task to the routed subagent."""
-    delegate = config.get("delegate") or {}
-    if not delegate.get("enabled", True):
-        return False, "delegation disabled"
-    if decision.context_dependent >= 0.5:
-        return False, "request depends on the conversation"
-
-    routed = tier_index(config["tiers"], decision.name)
-    if session is not None and routed == session:
-        return False, "session already runs this tier"
-    if session is not None and routed > session:
-        return True, "task needs a stronger tier than the session"
-
-    if decision.complexity_level < int(delegate.get("down_min_complexity_level", 1)):
-        return False, "too small to be worth a subagent"
-    return True, "a cheaper tier can do this task"

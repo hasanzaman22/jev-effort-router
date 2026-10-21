@@ -6,6 +6,9 @@ this order (later wins):
 1. ~/.claude/jev-router.json            (user-wide)
 2. <project>/.claude/jev-router.json    (per project)
 3. the file named by $JEV_ROUTER_CONFIG  (explicit)
+
+`/jevrouter:enable` and `/jevrouter:disable` write a small state file that
+overrides `enabled` from all of these, until the next one of those commands.
 """
 
 from __future__ import annotations
@@ -16,10 +19,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-# Tiers are ordered from cheapest to strongest. Each tier has a matching
-# subagent in agents/<name>.md, so tier names are fixed. Thresholds are not:
-# a request goes to the first tier whose max_difficulty is >= its difficulty,
-# which is Jev's capability level scaled to 0-1 (0, 0.25, 0.5, 0.75, 1).
+# Effort levels, lowest first. A level's name is what [jev:<name>] forces.
+# A request goes to the first level whose max_difficulty is >= its difficulty,
+# which is Jev's effort answer scaled to 0-1 (0, 0.33, 0.67, 1).
 DEFAULTS: dict[str, Any] = {
     "enabled": True,
     "jev": {
@@ -38,24 +40,16 @@ DEFAULTS: dict[str, Any] = {
     # 85% probability", so an uncertain answer resolves toward the harder level.
     "quantile": 0.85,
     "tiers": [
-        {"name": "haiku-low", "model": "haiku", "effort": "low", "max_difficulty": 0.0},
-        {"name": "sonnet-medium", "model": "sonnet", "effort": "medium", "max_difficulty": 0.25},
-        {"name": "sonnet-high", "model": "sonnet", "effort": "high", "max_difficulty": 0.5},
-        {"name": "opus-high", "model": "opus", "effort": "high", "max_difficulty": 0.75},
-        {"name": "opus-xhigh", "model": "opus", "effort": "xhigh", "max_difficulty": 1.0},
+        {"name": "low", "effort": "low", "max_difficulty": 0.0},
+        {"name": "medium", "effort": "medium", "max_difficulty": 0.34},
+        {"name": "high", "effort": "high", "max_difficulty": 0.67},
+        {"name": "xhigh", "effort": "xhigh", "max_difficulty": 1.0},
     ],
-    # A risky request never goes below this tier, whatever its difficulty.
-    "risk_floor": {"min_risk": 0.75, "tier": "opus-high"},
+    # A risky request never gets less effort than this, whatever its difficulty.
+    "risk_floor": {"min_risk": 0.75, "tier": "high"},
     # The offline heuristic is less reliable than Jev, so its pick moves up
-    # this many tiers.
+    # this many effort levels.
     "heuristic_tier_bump": 1,
-    "delegate": {
-        "enabled": True,
-        # Only hand work down to a cheaper subagent when the complexity level
-        # is at least this (0 = trivial question, 1 = small edit). Answering a
-        # trivial question directly is cheaper than spawning a subagent.
-        "down_min_complexity_level": 1,
-    },
     "show_decision": True,
     "log": True,
     "log_prompt_text": False,
@@ -95,7 +89,28 @@ def load_config(cwd: str | None = None) -> dict[str, Any]:
     for path in config_paths(cwd):
         if path.is_file():
             _deep_merge(config, _read_json(path))
+    enabled = read_state().get("enabled")
+    if isinstance(enabled, bool):
+        config["enabled"] = enabled
     return config
+
+
+def state_path() -> Path:
+    """The on/off switch. A fixed path, so the hook and the slash command agree on it."""
+    return Path.home() / ".claude" / "jev-router" / "state.json"
+
+
+def read_state() -> dict[str, Any]:
+    return _read_json(state_path())
+
+
+def set_enabled(enabled: bool) -> Path:
+    path = state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    state = read_state()
+    state["enabled"] = enabled
+    path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def data_dir() -> Path:

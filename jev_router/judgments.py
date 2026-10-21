@@ -1,4 +1,4 @@
-"""The four judgments the router needs about a prompt, from Jev or a heuristic.
+"""The three judgments the router needs about a prompt, from Jev or a heuristic.
 
 Both sources return the same shape: a probability distribution over the levels
 of each Score question, plus the probability that the prompt depends on the
@@ -22,33 +22,18 @@ def _level(what: str, examples: list[str]) -> dict[str, Any]:
     return {"what": what, "examples": examples}
 
 
-COMPLEXITY_LEVELS = [
-    _level("A conversational reply, a factual question, or a lookup that changes no code",
-           ["explain what a closure is", "what flag shows hidden files in ls", "show the README"]),
-    _level("A small, fully specified change in one place that needs no investigation",
-           ["fix a typo", "rename one variable", "change a constant", "add a line to a config file"]),
-    _level("A self-contained feature or fix in one area, a few files at most, with an obvious approach",
-           ["add a CLI flag", "add a form field with validation", "write tests for one function",
-            "add a simple endpoint"]),
-    _level("A feature or bug across several components that needs design or investigation",
-           ["add OAuth login", "find why a test is flaky", "add rate limiting",
-            "upgrade a major framework version"]),
-    _level("Large or subtle work: system architecture, concurrency, security-critical design, or novel algorithms",
-           ["redesign a cache for multi-region", "fix a deadlock between threads", "write a compiler"]),
-]
-
-# One level per tier, cheapest first. This is the question the tier comes from;
-# the others feed the risk floor and the delegation rules.
-CAPABILITY_LEVELS = [
-    _level("A small, fast model with minimal thinking",
+# One level per effort setting, lowest first. This is the question the effort
+# comes from; risk feeds the risk floor.
+EFFORT_LEVELS = [
+    _level("Minimal thinking: answer directly or make an obvious change",
            ["answer a factual question", "fix a typo", "rename a variable"]),
-    _level("A mid-sized model with moderate thinking",
+    _level("Moderate thinking: a few straightforward steps with an obvious approach",
            ["add a CLI flag", "write unit tests for a function", "add a simple endpoint"]),
-    _level("A mid-sized model with careful thinking",
-           ["add OAuth login", "debug a flaky test", "refactor a large class"]),
-    _level("The strongest model with careful thinking",
-           ["debug a production payment bug", "zero-downtime database migration", "security audit"]),
-    _level("The strongest model with extended deep thinking",
+    _level("Careful thinking: tracing code, comparing approaches, handling edge cases, or work where "
+           "a mistake is costly",
+           ["add OAuth login", "debug a flaky test", "zero-downtime database migration",
+            "debug a production payment bug"]),
+    _level("Extended deep thinking: many interacting constraints or subtle correctness",
            ["design a distributed system", "fix a subtle concurrency bug", "write a compiler"]),
 ]
 
@@ -66,21 +51,13 @@ RISK_LEVELS = [
 ]
 
 QUESTIONS: dict[str, dict[str, Any]] = {
-    "complexity": {
+    "effort": {
         "type": "score",
         "instructions": (
-            "How much work does it take a skilled software engineer using an AI coding "
-            "assistant to complete the request in `request.prompt`?"
+            "How much thinking does a strong AI coding assistant need to complete the request "
+            "in `request.prompt` correctly on the first attempt?"
         ),
-        "criteria": COMPLEXITY_LEVELS,
-    },
-    "capability": {
-        "type": "score",
-        "instructions": (
-            "Which is the least capable AI coding assistant that would still complete the "
-            "request in `request.prompt` correctly on the first attempt?"
-        ),
-        "criteria": CAPABILITY_LEVELS,
+        "criteria": EFFORT_LEVELS,
     },
     "risk": {
         "type": "score",
@@ -101,8 +78,7 @@ QUESTIONS: dict[str, dict[str, Any]] = {
 }
 
 SCORE_LEVELS = {
-    "complexity": len(COMPLEXITY_LEVELS),
-    "capability": len(CAPABILITY_LEVELS),
+    "effort": len(EFFORT_LEVELS),
     "risk": len(RISK_LEVELS),
 }
 
@@ -282,11 +258,11 @@ def heuristic(prompt: str) -> Judgments:
         complexity = 1
 
     reasoning_hits = len(_REASONING.findall(text)) + hard
-    capability = [0, 0, 1, 2, 4][complexity]
+    effort = [0, 0, 1, 2, 3][complexity]
     if reasoning_hits >= 3:
-        capability = max(capability, 3)
+        effort = max(effort, 3)
     elif reasoning_hits:
-        capability = max(capability, 2)
+        effort = max(effort, 2)
 
     risk_hits = len(_RISKY.findall(text))
     if risk_hits >= 2:
@@ -303,10 +279,9 @@ def heuristic(prompt: str) -> Judgments:
     return Judgments(
         source="heuristic",
         distributions={
-            "complexity": _peaked(complexity, SCORE_LEVELS["complexity"]),
-            "capability": _peaked(capability, SCORE_LEVELS["capability"]),
+            "effort": _peaked(effort, SCORE_LEVELS["effort"]),
             "risk": _peaked(risk, SCORE_LEVELS["risk"]),
         },
         context_dependent=context,
-        detail={"words": words, "files": files, "levels": [complexity, capability, risk]},
+        detail={"words": words, "files": files, "levels": [complexity, effort, risk]},
     )

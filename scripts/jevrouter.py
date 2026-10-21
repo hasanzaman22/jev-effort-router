@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Entry point for the UserPromptSubmit hook."""
+"""Entry point for the /jevrouter:enable, :disable, and :status slash commands."""
 
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from jev_router.hook import main  # noqa: E402
+from jev_router.command import main  # noqa: E402
 
 sys.exit(main())

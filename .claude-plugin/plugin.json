@@ -1,11 +1,11 @@
 {
-  "name": "jev-router",
-  "displayName": "Jev Model & Effort Router",
-  "version": "0.1.0",
-  "description": "Scores each prompt with TypeSafe Jev and routes it to the cheapest Claude model and effort level that keeps quality.",
+  "name": "jevrouter",
+  "displayName": "Jev Effort Router",
+  "version": "0.2.0",
+  "description": "Scores each prompt with TypeSafe Jev and sets the session's effort level to the lowest one that keeps quality.",
   "author": { "name": "Hasan Zamanli", "url": "https://github.com/hasanzaman22" },
   "homepage": "https://github.com/hasanzaman22/jev-model-effort-router",
   "repository": "https://github.com/hasanzaman22/jev-model-effort-router",
   "license": "MIT",
-  "keywords": ["router", "model", "effort", "cost", "jev", "typesafe"]
+  "keywords": ["router", "effort", "cost", "jev", "typesafe"]
 }

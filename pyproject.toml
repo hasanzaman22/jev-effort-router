@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jev-router"
-version = "0.1.0"
-description = "Route Claude Code prompts to the cheapest model and effort level that keeps quality, using TypeSafe Jev."
+version = "0.2.0"
+description = "Set the Claude Code effort level for each prompt automatically, using TypeSafe Jev."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"

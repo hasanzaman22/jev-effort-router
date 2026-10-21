@@ -1,4 +1,4 @@
-"""jev-claude: pick the model and effort for a new Claude Code session.
+"""jev-claude: pick the effort for a new Claude Code session.
 
     jev-claude "fix the typo in README.md"
     jev-claude --dry-run "redesign the auth flow"
@@ -41,13 +41,13 @@ def main(argv: list[str] | None = None) -> int:
         tier_name = ""
     else:
         tier = decision.tier
-        command = ["claude", "--model", tier["model"], "--effort", tier["effort"], *passthrough, args.prompt]
+        command = ["claude", "--effort", tier["effort"], *passthrough, args.prompt]
         tier_name = tier["name"]
 
     if args.dry_run:
         if args.json:
             print(json.dumps({
-                "tier": tier_name or None,
+                "effort": tier_name or None,
                 "difficulty": decision.difficulty if decision else None,
                 "source": decision.source if decision else None,
                 "reasons": decision.reasons if decision else [],
@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
             }, indent=2))
         else:
             if decision:
-                print(f"tier: {tier_name}  difficulty: {decision.difficulty:.2f}  source: {decision.source}")
+                print(f"effort: {tier_name}  difficulty: {decision.difficulty:.2f}  source: {decision.source}")
                 print("reasons: " + "; ".join(decision.reasons))
             print("command: " + " ".join(command[:-1]) + " <prompt>")
         return 0
@@ -66,10 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         print("jev-claude: `claude` is not on PATH", file=sys.stderr)
         return 127
     if decision:
-        print(f"jev-router: starting {tier_name} (difficulty {decision.difficulty:.2f}, {decision.source})",
+        print(f"jev-router: starting with effort {tier_name} (difficulty {decision.difficulty:.2f}, {decision.source})",
               file=sys.stderr)
-    env = dict(os.environ)
-    if tier_name:
-        env["JEV_ROUTER_SESSION_TIER"] = tier_name
-    os.execvpe(claude, command, env)
+    os.execvp(claude, command)
     return 0  # not reached

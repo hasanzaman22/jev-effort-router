@@ -1,91 +1,75 @@
 # jev-router
 
-Automatic model and effort routing for [Claude Code](https://code.claude.com), powered by
+Automatic effort level for [Claude Code](https://code.claude.com), powered by
 [TypeSafe Jev](https://docs.typesafe.ai).
 
-jev-router reads each prompt and estimates how hard and how risky the task is. It then sends the
-task to the cheapest Claude model and effort level that can still do it well. When it is unsure,
-it picks the stronger option, because saving money must not cost quality.
+jev-router reads each prompt and estimates how much thinking it needs and how risky it is. It
+then sets the Claude Code session's effort level to the lowest one that can still do the task
+well. It never changes the model: you keep the model you chose. When it is unsure, it picks more
+effort, because saving tokens must not cost quality.
 
 Example (the numbers are illustrative):
 
 ```
 you> fix the typo in README.md
-jev-router: haiku-low (difficulty 0.00, jev; delegating)
+jev-router: effort low (difficulty 0.00, jev)
 
 you> the checkout page double-charges some users in production, find out why
-jev-router: opus-high (difficulty 0.75, jev; delegating)
+jev-router: effort high (difficulty 0.67, jev)
 ```
 
 ## How it works
 
-Claude Code hooks cannot change the model or effort of a session that is already running. So
-jev-router works in two places:
+The plugin includes a Claude Code mod (`hooks/register.ts`) with two hooks:
 
-1. **Inside a session (plugin hook).** On every prompt, a `UserPromptSubmit` hook asks Jev four
-   questions about it, in a single request. It maps the answers to a tier, then tells Claude to
-   hand the task to a subagent pinned to that tier's model and effort. The plugin ships one
-   subagent per tier (`jev-router:haiku-low` … `jev-router:opus-xhigh`).
-2. **At session start (`jev-claude` launcher).** `jev-claude "<prompt>"` routes the first prompt
-   and starts `claude --model <model> --effort <effort>`. The whole session then runs on that
-   tier, with the full conversation context.
+1. **When you submit a prompt**, it runs the Python router, which asks Jev three questions about
+   the prompt in a single request and maps the answers to an effort level.
+2. **When Claude Code sends a request to the model**, it sets that effort on the request. This
+   covers every request of the turn, tool calls included. Subagents keep their own settings, and
+   a model without effort levels is left alone.
+
+The session keeps that effort until a prompt routes elsewhere. A prompt that only makes sense
+with the earlier conversation ("yes, do that", "continue") keeps the current effort, so the work
+it continues gets the same care. The status line shows the current effort, such as
+`jev effort: high`.
+
+The `jev-claude` launcher is optional: it routes a first prompt from the terminal and starts
+`claude --effort <effort>` with it.
 
 ### The judgments
 
-Jev answers these questions about each prompt. All four go in one request and run in parallel.
+Jev answers these questions about each prompt. All three go in one request and run in parallel.
 
 | Question | Type | Levels |
 | --- | --- | --- |
-| `complexity`: how much work the task is | Score | conversational reply → small edit → few-file task → large change → architecture or subtle bugs |
-| `capability`: the least capable assistant that would do it right the first time | Score | small fast model, minimal thinking → mid-sized, moderate → mid-sized, careful → strongest, careful → strongest, deep thinking |
+| `effort`: how much thinking a strong assistant needs to get it right the first time | Score | minimal → moderate → careful → extended deep thinking |
 | `risk`: what a subtle mistake would cost | Score | read-only → reversible dev change (including deleting temp files) → costly (APIs, auth, payments) → production, real user data, secrets, or irreversible |
 | `context_dependent`: whether it only makes sense with the earlier conversation | Noul | probability of yes |
 
-### From judgments to a tier
+### From judgments to an effort level
 
 Each Score level is a short description plus a few generic examples, which keeps Jev from
 splitting its answer between neighbouring levels.
 
 - **Unsure answers count as the harder level.** Each Score is read at the 85th percentile of its
-  probability distribution, not at its mean. If Jev puts 70% on "mid-sized model, careful
-  thinking" and 30% on "strongest model", the router takes the strongest model.
-- **Capability picks the tier.** The `capability` levels match the tiers one to one. The level is
-  scaled to a difficulty of 0, 0.25, 0.5, 0.75, or 1, and the task goes to the first tier whose
-  `max_difficulty` is at or above it:
+  probability distribution, not at its mean. If Jev puts 70% on "moderate thinking" and 30% on
+  "careful thinking", the router picks `high`.
+- **The effort answer picks the level.** Its four levels match the effort levels one to one. The
+  answer is scaled to a difficulty of 0, 0.33, 0.67, or 1, and the prompt gets the first level
+  whose `max_difficulty` is at or above it:
 
-  | Tier | Model | Effort | Max difficulty |
-  | --- | --- | --- | --- |
-  | `haiku-low` | haiku | low | 0.00 |
-  | `sonnet-medium` | sonnet | medium | 0.25 |
-  | `sonnet-high` | sonnet | high | 0.50 |
-  | `opus-high` | opus | high | 0.75 |
-  | `opus-xhigh` | opus | xhigh | 1.00 |
+  | Level | Max difficulty |
+  | --- | --- |
+  | `low` | 0.00 |
+  | `medium` | 0.34 |
+  | `high` | 0.67 |
+  | `xhigh` | 1.00 |
 
-- **Risk floor.** If the risk is at the top level (production, security, irreversible), the task
-  never goes below `opus-high`.
+- **Risk floor.** If the risk is at the top level (production, security, irreversible), the
+  effort is never below `high`.
 - **Offline fallback.** Without a Jev API key, or if Jev does not answer within 4 seconds,
-  a built-in keyword heuristic gives the same four judgments. Because the heuristic is less
-  reliable, its pick moves up one tier.
-
-### When it delegates
-
-The main session hands the task to the routed subagent when one of these is true:
-
-- the task needs a **stronger** tier than the session runs on, or
-- a **cheaper** tier can do it, and it is real work (a small edit or more). Trivial questions are
-  answered in the main session, because starting a subagent would cost more than answering.
-
-It does **not** delegate when:
-
-- the session already runs the routed tier, or
-- the prompt depends on the earlier conversation ("yes, do that", "fix it", "continue"). A
-  subagent does not see the conversation, so this protects quality.
-
-The session's tier comes from the `jev-claude` launcher, or else from the model of the last
-reply in the session transcript.
-
-If a subagent replies with `ESCALATE: <reason>`, or its result fails a check, the main session
-reruns the task on the next stronger tier.
+  a built-in keyword heuristic gives the same judgments. Because the heuristic is less
+  reliable, its pick moves up one level.
 
 ## Install
 
@@ -117,33 +101,35 @@ Without a key, jev-router still works, using the offline heuristic.
 
 ### 2. Install the plugin
 
-Requirements: Claude Code 2.1.251 or later, and `python3` 3.9 or later on `PATH`. The plugin
-has no Python dependencies.
+Requirements: Claude Code 2.1.306 or later, and `python3` 3.9 or later on `PATH`. The plugin
+has no Python dependencies. The effort switching uses Claude Code mods, which are in early access
+and may change between Claude Code releases.
 
 In Claude Code:
 
 ```
 /plugin marketplace add hasanzaman22/jev-model-effort-router
-/plugin install jev-router@jev-router
+/plugin install jevrouter@jevrouter
 ```
 
 Or from a terminal:
 
 ```sh
 claude plugin marketplace add hasanzaman22/jev-model-effort-router
-claude plugin install jev-router@jev-router
+claude plugin install jevrouter@jevrouter
 ```
 
-Restart Claude Code. Your next prompt shows a `jev-router: …` line.
+Restart Claude Code. Your next prompt shows a `jev-router: …` line, and the status line shows the
+session's current effort.
 
 To install it for a whole team, add this to the project's `.claude/settings.json`:
 
 ```json
 {
   "extraKnownMarketplaces": {
-    "jev-router": { "source": { "source": "github", "repo": "hasanzaman22/jev-model-effort-router" } }
+    "jevrouter": { "source": { "source": "github", "repo": "hasanzaman22/jev-model-effort-router" } }
   },
-  "enabledPlugins": { "jev-router@jev-router": true }
+  "enabledPlugins": { "jevrouter@jevrouter": true }
 }
 ```
 
@@ -158,7 +144,19 @@ pipx install git+https://github.com/hasanzaman22/jev-model-effort-router
 
 The plugin needs no action: type prompts as usual.
 
-**Start a session on the right tier:**
+**Turn routing on or off:**
+
+| Command | Effect |
+| --- | --- |
+| `/jevrouter:disable` | stop routing every prompt, until you run `/jevrouter:enable` |
+| `/jevrouter:enable` | route every prompt again, until you run `/jevrouter:disable` |
+| `/jevrouter:status` | show whether routing is on and which Jev service it uses |
+
+The switch applies to all your sessions and projects, and it lasts across restarts. It is saved in
+`~/.claude/jev-router/state.json` and overrides `enabled` in the config files. Routing is on
+until you first run one of these commands.
+
+**Start a session at the right effort:**
 
 ```sh
 jev-claude "add pagination to the /users endpoint"
@@ -172,15 +170,14 @@ jev-claude --dry-run --json "redesign the cache layer"   # as JSON
 | Put this in the prompt | Effect |
 | --- | --- |
 | `[jev:off]` | no routing for this prompt |
-| `[jev:opus-xhigh]` (any tier name) | force that tier |
+| `[jev:xhigh]` (`low`, `medium`, `high`, or `xhigh`) | force that effort |
 
-**See past decisions:** each decision is appended to `decisions.jsonl` in the plugin data
-directory (`~/.claude/plugins/data/<plugin id>/`), or in `~/.claude/jev-router/` when the
-launcher runs outside Claude Code. A log record has the tier, difficulty, source, reasons, and a
-hash of the prompt. It holds the prompt text only if you set `log_prompt_text`.
+**See past decisions:** each decision is appended to `~/.claude/jev-router/decisions.jsonl`. A
+log record has the effort (`tier`), difficulty, source, reasons, and a hash of the prompt. It holds the
+prompt text only if you set `log_prompt_text`.
 
 ```sh
-tail -n 5 ~/.claude/plugins/data/*jev-router*/decisions.jsonl
+tail -n 5 ~/.claude/jev-router/decisions.jsonl
 ```
 
 ## Configure
@@ -200,12 +197,10 @@ Later files override earlier ones, key by key:
 | `jev.endpoint` | the provider's | Jev request URL, for a proxy or a new service |
 | `jev.model` | the provider's | Jev model name, such as `"typesafe/jev-1.14"` to pin a version on OpenRouter |
 | `jev.timeout_seconds` | `4.0` | after this, use the heuristic |
-| `quantile` | `0.85` | how strongly uncertainty pushes toward stronger tiers (higher = safer, costlier) |
-| `tiers[].max_difficulty` | see table above | tier thresholds. Tier names are fixed, because each one has a subagent. |
-| `risk_floor` | `{"min_risk": 0.75, "tier": "opus-high"}` | the lowest tier allowed for risky work |
-| `heuristic_tier_bump` | `1` | extra tiers added when the heuristic decides |
-| `delegate.enabled` | `true` | if `false`, only show the decision and never delegate |
-| `delegate.down_min_complexity_level` | `1` | the smallest complexity level worth delegating to a cheaper tier |
+| `quantile` | `0.85` | how strongly uncertainty pushes toward more effort (higher = safer, costlier) |
+| `tiers[].max_difficulty` | see table above | effort thresholds |
+| `risk_floor` | `{"min_risk": 0.75, "tier": "high"}` | the lowest effort allowed for risky work |
+| `heuristic_tier_bump` | `1` | extra effort levels added when the heuristic decides |
 | `show_decision` | `true` | show the `jev-router: …` line |
 | `log` / `log_prompt_text` | `true` / `false` | write decision logs, and whether to include the prompt text |
 
@@ -214,16 +209,16 @@ Later files override earlier ones, key by key:
 ## Quality and cost
 
 - Every rule that chooses between cost and quality chooses quality: the percentile reading, the
-  risk floor, the heuristic bump, and escalation.
+  risk floor, and the heuristic bump.
 - Each prompt costs one small Jev request: a few hundred input tokens (output tokens are free).
-  The savings come when tasks run on Haiku or Sonnet instead of Opus.
-- Delegation has overhead: the main session writes a brief and reads the result. If your
-  session already runs on a cheap model, start hard tasks with `jev-claude`, or let the hook
-  move them up to a stronger tier.
+  The savings come from fewer thinking tokens on easy prompts.
+- Changing the effort keeps the prompt cache on the Claude 5.5 models, so switching costs
+  nothing extra there. On older models, the first request after a change reads the conversation
+  without the cache.
 - **Measured accuracy.** On 54 held-out coding prompts labeled by hand (Jev 1.14), the router
-  picked the expected tier for 46, one tier higher for 7, two tiers higher for 1, and a tier that
-  was too weak for none. It flagged all 60 prompts correctly as depending on the earlier
-  conversation or not. The labels are one person's judgment, so treat this as a sanity check.
+  picked the expected effort for 43, one level higher for 10, and one level lower for 1. It
+  flagged all 60 prompts correctly as depending on the earlier conversation or not. The labels
+  are one person's judgment, so treat this as a sanity check.
 - **Check it on your own work.** The thresholds are a starting point. Look at
   `decisions.jsonl` and adjust `tiers[].max_difficulty` or `quantile` if the routing does not
   match what you would choose.
@@ -233,15 +228,16 @@ Later files override earlier ones, key by key:
 ```sh
 python3 -m unittest discover -s tests -t .
 claude plugin validate .
-echo '{"prompt":"rename foo to bar in utils.py","cwd":"."}' | python3 scripts/route_hook.py
+echo '{"prompt":"rename foo to bar in utils.py","cwd":"."}' | python3 scripts/route_switch.py
+claude --plugin-dir .    # a session with the plugin loaded from this folder
 ```
 
 Layout:
 
 ```
 .claude-plugin/   plugin.json and marketplace.json
-hooks/hooks.json  UserPromptSubmit hook
-agents/           one subagent per tier (model and effort in the frontmatter)
+hooks/            the mod: hooks.json names register.ts, which switches the effort
+commands/         /jevrouter:enable, :disable, and :status
 jev_router/       router code (Python standard library only)
 bin/jev-claude    launcher
 tests/            unit tests (Jev is mocked)

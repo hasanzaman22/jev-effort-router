@@ -1,7 +1,6 @@
 {
   "quantile": 0.95,
   "risk_floor": { "min_risk": 0.66, "tier": "opus-high" },
-  "delegate": { "enabled": true, "down_min_complexity_level": 2 },
   "show_decision": true,
   "log_prompt_text": false
 }

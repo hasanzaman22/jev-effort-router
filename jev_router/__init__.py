@@ -1,3 +1,3 @@
-"""jev-router: route Claude Code prompts to the cheapest model and effort that keeps quality."""
+"""jev-router: set the Claude Code effort level for each prompt to the lowest one that keeps quality."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

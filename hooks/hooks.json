@@ -1,15 +1,1 @@
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/route_hook.py\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  }
-}
+{ "modules": ["./register.ts"] }
